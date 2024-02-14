@@ -17,36 +17,41 @@
  * @author Naoki Akai
  ****************************************************************************/
 
-#include <ros/ros.h>
+// #include <ros/ros.h>
+#include <rclcpp/rclcpp.hpp>
 #include <als_ros/MCL.h>
 
-int main(int argc, char **argv) {
-    ros::init(argc, argv, "mcl");
+int main(int argc, char * argv[]){
+    rclcpp::init(argc, argv);
+    rclcpp::spin(std::make_shared<als_ros::MCL>());
+    rclcpp::shutdown();
 
-    als_ros::MCL mcl;
-    double localizationHz = mcl.getLocalizationHz();
-    ros::Rate loopRate(localizationHz);
+    // ros::init(argc, argv, "mcl");
 
-    while (ros::ok()) {
-        ros::spinOnce();
-        mcl.updateParticlesByMotionModel();
-        mcl.setCanUpdateScan(false);
-        mcl.calculateLikelihoodsByMeasurementModel();
-        mcl.calculateLikelihoodsByDecisionModel();
-        mcl.calculateGLSampledPosesLikelihood();
-        mcl.calculateAMCLRandomParticlesRate();
-        mcl.calculateEffectiveSampleSize();
-        mcl.estimatePose();
-        mcl.resampleParticles();
-        // mcl.plotScan();
-        // mcl.plotWorld(50.0);
-        mcl.publishROSMessages();
-        mcl.broadcastTF();
-        // mcl.plotLikelihoodMap();
-        mcl.setCanUpdateScan(true);
-        mcl.printResult();
-        loopRate.sleep();
-    }
+    // als_ros::MCL mcl;
+    // double localizationHz = mcl.getLocalizationHz();
+    // ros::Rate loopRate(localizationHz);
+
+    // while (ros::ok()) {
+    //     ros::spinOnce();
+    //     mcl.updateParticlesByMotionModel();
+    //     mcl.setCanUpdateScan(false);
+    //     mcl.calculateLikelihoodsByMeasurementModel();
+    //     mcl.calculateLikelihoodsByDecisionModel();
+    //     mcl.calculateGLSampledPosesLikelihood();
+    //     mcl.calculateAMCLRandomParticlesRate();
+    //     mcl.calculateEffectiveSampleSize();
+    //     mcl.estimatePose();
+    //     mcl.resampleParticles();
+    //     // mcl.plotScan();
+    //     // mcl.plotWorld(50.0);
+    //     mcl.publishROSMessages();
+    //     mcl.broadcastTF();
+    //     // mcl.plotLikelihoodMap();
+    //     mcl.setCanUpdateScan(true);
+    //     mcl.printResult();
+    //     loopRate.sleep();
+    // }
 
     return 0;
 }

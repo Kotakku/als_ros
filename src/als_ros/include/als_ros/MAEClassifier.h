@@ -143,6 +143,7 @@ public:
     void writeClassifierParams(std::vector<std::vector<double>> testSuccessResidualErrors, std::vector<std::vector<double>> testFailureResidualErrors) {
         std::string mkdirCmd = "mkdir -p " + classifiersDir_; 
         int retVal = system(mkdirCmd.c_str());
+        (void) retVal;
 
         std::string positiveMAEsFileName = classifiersDir_ + "positive_maes.txt";
         std::string negativeMAEsFileName = classifiersDir_ + "negative_maes.txt";
