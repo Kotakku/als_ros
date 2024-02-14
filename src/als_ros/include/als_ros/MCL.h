@@ -22,24 +22,24 @@
 
 #include <string>
 #include <vector>
-#include <rclcpp/rclcpp.hpp> // #include <ros/ros.h>
+#include <rclcpp/rclcpp.hpp>
 #include <opencv2/opencv.hpp>
-#include <geometry_msgs/msg/pose_stamped.hpp> //#include <geometry_msgs/PoseStamped.h>
-#include <geometry_msgs/msg/pose_array.hpp> // #include <geometry_msgs/PoseArray.h>
-#include <geometry_msgs/msg/pose_with_covariance_stamped.hpp> // #include <geometry_msgs/PoseWithCovarianceStamped.h>
-#include <sensor_msgs/msg/laser_scan.hpp> // #include <sensor_msgs/LaserScan.h>
-#include <nav_msgs/msg/occupancy_grid.hpp> // #include <nav_msgs/OccupancyGrid.h>
-#include <nav_msgs/msg/odometry.hpp> // #include <nav_msgs/Odometry.h>
+#include <geometry_msgs/msg/pose_stamped.hpp>
+#include <geometry_msgs/msg/pose_array.hpp>
+#include <geometry_msgs/msg/pose_with_covariance_stamped.hpp>
+#include <sensor_msgs/msg/laser_scan.hpp>
+#include <nav_msgs/msg/occupancy_grid.hpp>
+#include <nav_msgs/msg/odometry.hpp>
 
-#include <tf2_ros/transform_broadcaster.h> // #include <tf/transform_broadcaster.h>
-#include <tf2_ros/transform_listener.h> // #include <tf/transform_listener.h>
+#include <tf2_ros/transform_broadcaster.h>
+#include <tf2_ros/transform_listener.h>
 #include <tf2_ros/buffer.h>
 #include <tf2/utils.h>
 #include <tf2/convert.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include <tf2/LinearMath/Quaternion.h>
 
-#include <visualization_msgs/msg/marker.hpp> // #include <visualization_msgs/Marker.h>
+#include <visualization_msgs/msg/marker.hpp>
 #include <als_ros/Pose.h>
 #include <als_ros/Particle.h>
 #include <als_ros/MAEClassifier.h>
@@ -48,12 +48,10 @@ namespace als_ros {
 
 class MCL: public rclcpp::Node {
 private:
-    // node handler
-    // ros::NodeHandle nh_;
+    rclcpp::TimerBase::SharedPtr timer_;
 
     // subscribers
     std::string scanName_, odomName_, mapName_, glSampledPosesName_;
-    // ros::Subscriber scanSub_, odomSub_, mapSub_, glSampledPosesPub_, initialPoseSub_;
     rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scanSub_;
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odomSub_;
     rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr mapSub_;
@@ -63,7 +61,6 @@ private:
     // publishers
     std::string poseName_, particlesName_, unknownScanName_, residualErrorsName_, reliabilityName_;
     const std::string reliabilityMarkerName_ = "/reliability_marker_name";
-    // ros::Publisher posePub_, particlesPub_, unknownScanPub_, residualErrorsPub_, reliabilityPub_, reliabilityMarkerPub_;
     rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr posePub_;
     rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr particlesPub_;
     rclcpp::Publisher<sensor_msgs::msg::LaserScan>::SharedPtr unknownScanPub_;
@@ -142,8 +139,6 @@ private:
     int maxLikelihoodParticleIdx_;
 
     // other parameters
-    // tf::TransformBroadcaster tfBroadcaster_;
-    // tf::TransformListener tfListener_;
     tf2_ros::TransformBroadcaster tfBroadcaster_;
     tf2_ros::Buffer tfBuffer_;
     tf2_ros::TransformListener tfListener_;
@@ -169,6 +164,11 @@ private:
     // pose record
     bool writePose_;
     std::string poseLogFile_;
+
+    bool isInitializedTFAndTopic_ = false;
+    bool isInitializedTF_ = false;
+    bool isInitializedMap_ = false;
+    bool isInitializedTopic_ = false;
 
     // constant parameters
     const double rad2deg_ = 180.0 / M_PI;
@@ -231,254 +231,172 @@ public:
         tfListener_(tfBuffer_)
     {
         // topic and frame names
-        // nh_.param("scan_name", scanName_, scanName_);
         declare_parameter("scan_name", "/scan");
         get_parameter("scan_name", scanName_);
-
-        // nh_.param("odom_name", odomName_, odomName_);
         declare_parameter("odom_name", "/odom");
         get_parameter("odom_name", odomName_);
-
-        // nh_.param("map_name", mapName_, mapName_);
         declare_parameter("map_name", "/map");
         get_parameter("map_name", mapName_);
-
-        // nh_.param("pose_name", poseName_, poseName_);
         declare_parameter("pose_name", "/mcl_pose");
         get_parameter("pose_name", poseName_);
-
-        // nh_.param("particles_name", particlesName_, particlesName_);
         declare_parameter("particles_name", "/mcl_particles");
         get_parameter("particles_name", particlesName_);
-        // nh_.param("unknown_scan_name", unknownScanName_, unknownScanName_);  
         declare_parameter("unknown_scan_name", "/unknown_scan");
         get_parameter("unknown_scan_name", unknownScanName_);
 
-        // nh_.param("residual_errors_name", residualErrorsName_, residualErrorsName_);
         declare_parameter("residual_errors_name", "/residual_errors");
         get_parameter("residual_errors_name", residualErrorsName_);
-        // nh_.param("reliability_name", reliabilityName_, reliabilityName_);
         declare_parameter("reliability_name", "/reliability");
         get_parameter("reliability_name", reliabilityName_);
-        // nh_.param("gl_sampled_poses_name", glSampledPosesName_, glSampledPosesName_);
         declare_parameter("gl_sampled_poses_name", "/gl_sampled_poses");
         get_parameter("gl_sampled_poses_name", glSampledPosesName_);
-        // nh_.param("laser_frame", laserFrame_, laserFrame_);
         declare_parameter("laser_frame", "laser");
         get_parameter("laser_frame", laserFrame_);
-        // nh_.param("base_link_frame", baseLinkFrame_, baseLinkFrame_);
         declare_parameter("base_link_frame", "base_link");
         get_parameter("base_link_frame", baseLinkFrame_);
-        // nh_.param("map_frame", mapFrame_, mapFrame_);
         declare_parameter("map_frame", "map");
         get_parameter("map_frame", mapFrame_);
-        // nh_.param("odom_frame", odomFrame_, odomFrame_);
         declare_parameter("odom_frame", "odom");
         get_parameter("odom_frame", odomFrame_);
-        // nh_.param("broadcast_tf", broadcastTF_, broadcastTF_);
         declare_parameter("broadcast_tf", true);
         get_parameter("broadcast_tf", broadcastTF_);
-        // nh_.param("use_odom_tf", useOdomTF_, useOdomTF_);
         declare_parameter("use_odom_tf", true);
         get_parameter("use_odom_tf", useOdomTF_);
 
-        // // particle filter parameters
-        // nh_.param("initial_pose_x", initialPoseX_, initialPoseX_);
+        // particle filter parameters
         declare_parameter("initial_pose_x", 0.0);
         get_parameter("initial_pose_x", initialPoseX_);
-        // nh_.param("initial_pose_y", initialPoseY_, initialPoseY_);
         declare_parameter("initial_pose_y", 0.0);
         get_parameter("initial_pose_y", initialPoseY_);
-        // nh_.param("initial_pose_yaw", initialPoseYaw_, initialPoseYaw_);
         declare_parameter("initial_pose_yaw", 0.0);
         get_parameter("initial_pose_yaw", initialPoseYaw_);
-        // nh_.param("initial_noise_x", initialNoiseX_, initialNoiseX_);
         declare_parameter("initial_noise_x", 0.02);
         get_parameter("initial_noise_x", initialNoiseX_);
-        // nh_.param("initial_noise_y", initialNoiseY_, initialNoiseY_);
         declare_parameter("initial_noise_y", 0.02);
         get_parameter("initial_noise_y", initialNoiseY_);
-        // nh_.param("initial_noise_yaw", initialNoiseYaw_, initialNoiseYaw_);
         declare_parameter("initial_noise_yaw", 0.02);
         get_parameter("initial_noise_yaw", initialNoiseYaw_);
-        // nh_.param("particle_num", particlesNum_, particlesNum_);
         declare_parameter("particle_num", 100);
         get_parameter("particle_num", particlesNum_);
-        // nh_.param("use_augmented_mcl", useAugmentedMCL_, useAugmentedMCL_);
         declare_parameter("use_augmented_mcl", false);
         get_parameter("use_augmented_mcl", useAugmentedMCL_);
-        // nh_.param("add_random_particles_in_resampling", addRandomParticlesInResampling_, addRandomParticlesInResampling_);
         declare_parameter("add_random_particles_in_resampling", true);
         get_parameter("add_random_particles_in_resampling", addRandomParticlesInResampling_);
-        // nh_.param("random_particles_rate", randomParticlesRate_, randomParticlesRate_);
         declare_parameter("random_particles_rate", 0.1);
         get_parameter("random_particles_rate", randomParticlesRate_);
-        // nh_.param("random_particles_noise", randomParticlesNoise_, randomParticlesNoise_);
         declare_parameter("random_particles_noise", std::vector<double>({0.1, 0.1, 0.01}));
         get_parameter("random_particles_noise", randomParticlesNoise_);
 
-        // // motion
-        // nh_.param("odom_noise_ddm", odomNoiseDDM_, odomNoiseDDM_);
+        // motion
         declare_parameter("odom_noise_ddm", std::vector<double>({1.0, 0.5, 0.5, 1.0}));
         get_parameter("odom_noise_ddm", odomNoiseDDM_);
-        // nh_.param("odom_noise_odm", odomNoiseODM_, odomNoiseODM_);
         declare_parameter("odom_noise_odm", std::vector<double>({1.0, 0.5, 0.5, 0.5, 1.0, 0.5, 0.5, 0.5, 1.0}));
         get_parameter("odom_noise_odm", odomNoiseODM_);
-        // nh_.param("use_omni_directional_model", useOmniDirectionalModel_, useOmniDirectionalModel_);
         declare_parameter("use_omni_directional_model", false);
         get_parameter("use_omni_directional_model", useOmniDirectionalModel_);
 
-        // // measurement model
-        // nh_.param("measurement_model_type", measurementModelType_, measurementModelType_);
+        // measurement model
         declare_parameter("measurement_model_type", 0);
         get_parameter("measurement_model_type", measurementModelType_);
-        // nh_.param("scan_step", scanStep_, scanStep_);
         declare_parameter("scan_step", 10);
         get_parameter("scan_step", scanStep_);
-        // nh_.param("z_hit", zHit_, zHit_);
         declare_parameter("z_hit", 0.9);
         get_parameter("z_hit", zHit_);
-        // nh_.param("z_short", zShort_, zShort_);
         declare_parameter("z_short", 0.2);
         get_parameter("z_short", zShort_);
-        // nh_.param("z_max", zMax_, zMax_);
         declare_parameter("z_max", 0.05);
         get_parameter("z_max", zMax_);
-        // nh_.param("z_rand", zRand_, zRand_);
         declare_parameter("z_rand", 0.05);
         get_parameter("z_rand", zRand_);
-        // nh_.param("var_hit", varHit_, varHit_);
         declare_parameter("var_hit", 0.1);
         get_parameter("var_hit", varHit_);
-        // nh_.param("lambda_short", lambdaShort_, lambdaShort_);
         declare_parameter("lambda_short", 3.0);
         get_parameter("lambda_short", lambdaShort_);
-        // nh_.param("lambda_unknown", lambdaUnknown_, lambdaUnknown_);
         declare_parameter("lambda_unknown", 1.0);
         get_parameter("lambda_unknown", lambdaUnknown_);
-        // nh_.param("known_class_prior", pKnownPrior_, pKnownPrior_);
         declare_parameter("known_class_prior", 0.5);
         get_parameter("known_class_prior", pKnownPrior_);
-        // nh_.param("unknown_scan_prob_threshold", unknownScanProbThreshold_, unknownScanProbThreshold_);
         declare_parameter("unknown_scan_prob_threshold", 0.5);
         get_parameter("unknown_scan_prob_threshold", unknownScanProbThreshold_);
-        // nh_.param("alpha_slow", alphaSlow_, alphaSlow_);
         declare_parameter("alpha_slow", 0.001);
         get_parameter("alpha_slow", alphaSlow_);
-        // nh_.param("alpha_fast", alphaFast_, alphaFast_);
         declare_parameter("alpha_fast", 0.9);
         get_parameter("alpha_fast", alphaFast_);
-        // nh_.param("reject_unknown_scan", rejectUnknownScan_, rejectUnknownScan_);
         declare_parameter("reject_unknown_scan", false);
         get_parameter("reject_unknown_scan", rejectUnknownScan_);
-        // nh_.param("publish_unknown_scan", publishUnknownScan_, publishUnknownScan_);
         declare_parameter("publish_unknown_scan", false);
         get_parameter("publish_unknown_scan", publishUnknownScan_);
-        // nh_.param("publish_residual_errors", publishResidualErrors_, publishResidualErrors_);
         declare_parameter("publish_residual_errors", false);
         get_parameter("publish_residual_errors", publishResidualErrors_);
-        // nh_.param("resample_threshold_ess", resampleThresholdESS_, resampleThresholdESS_);
         declare_parameter("resample_threshold_ess", 0.5);
         get_parameter("resample_threshold_ess", resampleThresholdESS_);
-        // nh_.param("resample_thresholds", resampleThresholds_, resampleThresholds_);
         declare_parameter("resample_thresholds", std::vector<double>({-1.0, -1.0, -1.0, -1.0, -1.0}));
         get_parameter("resample_thresholds", resampleThresholds_);
         pUnknownPrior_ = 1.0 - pKnownPrior_;
 
-        // // reliability estimation
-        // nh_.param("estimate_reliability", estimateReliability_, estimateReliability_);
+        // reliability estimation
         declare_parameter("estimate_reliability", true);
         get_parameter("estimate_reliability", estimateReliability_);
-        // nh_.param("rel_trans_ddm", relTransDDM_, relTransDDM_);
         declare_parameter("rel_trans_ddm", std::vector<double>({0.0, 0.0}));
         get_parameter("rel_trans_ddm", relTransDDM_);
-        // nh_.param("rel_trans_odm", relTransODM_, relTransODM_);
         declare_parameter("rel_trans_odm", std::vector<double>({0.0, 0.0, 0.0}));
         get_parameter("rel_trans_odm", relTransODM_);
 
-        // // failure detector
-        // nh_.param("classifier_type", classifierType_, classifierType_);
+        // failure detector
         declare_parameter("classifier_type", 0);
         get_parameter("classifier_type", classifierType_);
-        // nh_.param("mae_classifier_dir", maeClassifierDir_, maeClassifierDir_);
         declare_parameter("mae_classifier_dir", "/home/akai/Dropbox/git/als_ros/src/als_ros/classifiers/MAE/");
         get_parameter("mae_classifier_dir", maeClassifierDir_);
 
-        // // global-localization-based pose sampling
-        // nh_.param("use_gl_pose_sampler", useGLPoseSampler_, useGLPoseSampler_);
+        // global-localization-based pose sampling
         declare_parameter("use_gl_pose_sampler", false);
         get_parameter("use_gl_pose_sampler", useGLPoseSampler_);
-        // nh_.param("fuse_gl_pose_sampler_only_unreliable", fuseGLPoseSamplerOnlyUnreliable_, fuseGLPoseSamplerOnlyUnreliable_);
         declare_parameter("fuse_gl_pose_sampler_only_unreliable", false);
         get_parameter("fuse_gl_pose_sampler_only_unreliable", fuseGLPoseSamplerOnlyUnreliable_);
-        // nh_.param("gl_sampled_pose_time_th", glSampledPoseTimeTH_, glSampledPoseTimeTH_);
         declare_parameter("gl_sampled_pose_time_th", 0.5);
         get_parameter("gl_sampled_pose_time_th", glSampledPoseTimeTH_);
-        // nh_.param("gmm_positional_variance", gmmPositionalVariance_, gmmPositionalVariance_);
         declare_parameter("gmm_positional_variance", 0.1);
         get_parameter("gmm_positional_variance", gmmPositionalVariance_);
-        // nh_.param("gmm_angular_variance", gmmAngularVariance_, gmmAngularVariance_);
         declare_parameter("gmm_angular_variance", 0.1);
         get_parameter("gmm_angular_variance", gmmAngularVariance_);
-        // nh_.param("pred_dist_unif_rate", predDistUnifRate_, predDistUnifRate_);
         declare_parameter("pred_dist_unif_rate", 0.05);
         get_parameter("pred_dist_unif_rate", predDistUnifRate_);
 
         // // write pose
-        // nh_.param("write_pose", writePose_, writePose_);
         declare_parameter("write_pose", false);
         get_parameter("write_pose", writePose_);
-        // nh_.param("pose_log_file", poseLogFile_, poseLogFile_);
         declare_parameter("pose_log_file", "/tmp/als_ros_pose.txt");
         get_parameter("pose_log_file", poseLogFile_);
 
         // // other parameters
-        // nh_.param("localization_hz", localizationHz_, localizationHz_);
         declare_parameter("localization_hz", 10.0);
         get_parameter("localization_hz", localizationHz_);
-        // nh_.param("transform_tolerance", transformTolerance_, transformTolerance_);
         declare_parameter("transform_tolerance", 1.0);
         get_parameter("transform_tolerance", transformTolerance_);
 
         // set subscribers
-        // scanSub_ = nh_.subscribe(scanName_, 10, &MCL::scanCB, this);
         scanSub_ = this->create_subscription<sensor_msgs::msg::LaserScan>(
             scanName_, 10, std::bind(&MCL::scanCB, this, std::placeholders::_1));
-
-        // odomSub_ = nh_.subscribe(odomName_, 100, &MCL::odomCB, this);
         odomSub_ = this->create_subscription<nav_msgs::msg::Odometry>(
             odomName_, 100, std::bind(&MCL::odomCB, this, std::placeholders::_1));
-
-        // mapSub_ = nh_.subscribe(mapName_, 1, &MCL::mapCB, this);
         mapSub_ = this->create_subscription<nav_msgs::msg::OccupancyGrid>(
             mapName_, 1, std::bind(&MCL::mapCB, this, std::placeholders::_1));
-
-        // initialPoseSub_ = nh_.subscribe("/initialpose", 1, &MCL::initialPoseCB, this);
         initialPoseSub_ = this->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>(
             "/initialpose", 1, std::bind(&MCL::initialPoseCB, this, std::placeholders::_1));
 
         if (useGLPoseSampler_)
-            // glSampledPosesPub_ = nh_.subscribe(glSampledPosesName_, 1, &MCL::glSampledPosesCB, this);
             glSampledPosesPub_ = this->create_subscription<geometry_msgs::msg::PoseArray>(
                 glSampledPosesName_, 1, std::bind(&MCL::glSampledPosesCB, this, std::placeholders::_1));
 
         // set publishers
-        // posePub_ = nh_.advertise<geometry_msgs::msg::PoseStamped>(poseName_, 1);
         posePub_ = this->create_publisher<geometry_msgs::msg::PoseStamped>(poseName_, 1);
-
-        // particlesPub_ = nh_.advertise<geometry_msgs::msg::PoseArray>(particlesName_, 1);
         particlesPub_ = this->create_publisher<geometry_msgs::msg::PoseArray>(particlesName_, 1);
-
         if (publishUnknownScan_)
-            // unknownScanPub_ = nh_.advertise<sensor_msgs::msg::LaserScan>(unknownScanName_, 1);
             unknownScanPub_ = this->create_publisher<sensor_msgs::msg::LaserScan>(unknownScanName_, 1);
         if (publishResidualErrors_)
-            // residualErrorsPub_ = nh_.advertise<sensor_msgs::msg::LaserScan>(residualErrorsName_, 1);
             residualErrorsPub_ = this->create_publisher<sensor_msgs::msg::LaserScan>(residualErrorsName_, 1);
         if (estimateReliability_) {
-            // reliabilityPub_ = nh_.advertise<geometry_msgs::msg::Vector3Stamped>(reliabilityName_, 1);
             reliabilityPub_ = this->create_publisher<geometry_msgs::msg::Vector3Stamped>(reliabilityName_, 1);
-            // reliabilityMarkerPub_ = nh_.advertise<visualization_msgs::msg::Marker>(reliabilityMarkerName_, 1);
             reliabilityMarkerPub_ = this->create_publisher<visualization_msgs::msg::Marker>(reliabilityMarkerName_, 1);
         }
 
@@ -491,96 +409,154 @@ public:
         odomPose_.setPose(0.0, 0.0, 0.0);
         deltaX_ = deltaY_ = deltaDist_ = deltaYaw_ = 0.0;
 
-        // get the relative pose from the base link to the laser from the tf tree
-        // ros::Rate loopRate(10);
-        // tf::StampedTransform tfBaseLink2Laser;
-        // int tfFailedCnt = 0;
-        // while (ros::ok()) {
-        //     ros::spinOnce();
-        //     try {
-        //         rclcpp::Time now = get_clock()->now();
-        //         tfListener_.waitForTransform(baseLinkFrame_, laserFrame_, now, ros::Duration(2.0));
-        //         tfListener_.lookupTransform(baseLinkFrame_, laserFrame_, now, tfBaseLink2Laser);
-        //         break;
-        //     } catch (tf::TransformException ex) {
-        //         tfFailedCnt++;
-        //         if (tfFailedCnt >= 300) {
-        //             RCLCPP_ERROR(get_logger(), "Cannot get the relative pose from the base link to the laser from the tf tree."
-        //                 " Did you set the static transform publisher between %s to %s?",
-        //                 baseLinkFrame_.c_str(), laserFrame_.c_str());
-        //             exit(1);
-        //         }
-        //         loopRate.sleep();
-        //     }
-        // }
-        // tf2::Quaternion quatBaseLink2Laser(tfBaseLink2Laser.getRotation().x(),
-        //     tfBaseLink2Laser.getRotation().y(),
-        //     tfBaseLink2Laser.getRotation().z(),
-        //     tfBaseLink2Laser.getRotation().w());
-        // double baseLink2LaserRoll, baseLink2LaserPitch, baseLink2LaserYaw;
-        // tf2::Matrix3x3 rotMatBaseLink2Laser(quatBaseLink2Laser);
-        // rotMatBaseLink2Laser.getRPY(baseLink2LaserRoll, baseLink2LaserPitch, baseLink2LaserYaw);
-        // baseLink2Laser_.setX(tfBaseLink2Laser.getOrigin().x());
-        // baseLink2Laser_.setY(tfBaseLink2Laser.getOrigin().y());
-        // baseLink2Laser_.setYaw(baseLink2LaserYaw);
+        timer_ = this->create_wall_timer(
+            std::chrono::milliseconds(std::max<int>((1000 / getLocalizationHz()), 1)),
+            std::bind(&MCL::update, this)
+        );
+    }
 
-        // // check map
-        // int mapFailedCnt = 0;
-        // while (ros::ok()) {
-        //     ros::spinOnce();
-        //     if (gotMap_)
-        //         break;
-        //     mapFailedCnt++;
-        //     if (mapFailedCnt >= 300) {
-        //         RCLCPP_ERROR(get_logger(), "Cannot get a map message."
-        //             " Did you pulish the map?"
-        //             " Expected map topic name is %s\n", mapName_.c_str());
-        //         exit(1);
-        //     }
-        //     loopRate.sleep();
-        // }
+    void update()
+    {
+        static int tfFailedCnt = 0;
+        static int mapFailedCnt = 0;
+        static int scanFailedCnt = 0;
+        if(not isInitializedTFAndTopic_)
+        {
+            // get the relative pose from the base link to the laser from the tf tree
+            if(not isInitializedTF_)
+            {
+                RCLCPP_INFO(get_logger(), "Waiting for the relative pose from the base link to the laser from the tf tree.");
+                tf2::Transform tfBaseLink2Laser;
+                try {
+                    rclcpp::Time now = get_clock()->now();
+                    // tfBuffer_.waitForTransform(baseLinkFrame_, laserFrame_, now, rclcpp::Duration(2.0));
+                    auto tfMsg = tfBuffer_.lookupTransform(baseLinkFrame_, laserFrame_, now, rclcpp::Duration::from_seconds(2.0));
 
-        // // check scan
-        // int scanFailedCnt = 0;
-        // while (ros::ok()) {
-        //     ros::spinOnce();
-        //     if (gotScan_)
-        //         break;
-        //     scanFailedCnt++;
-        //     if (scanFailedCnt >= 300) {
-        //         RCLCPP_ERROR(get_logger(), "Cannot get a scan message."
-        //             " Did you pulish the scan?"
-        //             " Expected scan topic name is %s\n", scanName_.c_str());
-        //         exit(1);
-        //     }
-        //     loopRate.sleep();
-        // }
+                    tfBaseLink2Laser.setOrigin(tf2::Vector3(tfMsg.transform.translation.x, 
+                                                            tfMsg.transform.translation.y, 
+                                                            tfMsg.transform.translation.z));
+                    tfBaseLink2Laser.setRotation(tf2::Quaternion(tfMsg.transform.rotation.x, 
+                                                                tfMsg.transform.rotation.y, 
+                                                                tfMsg.transform.rotation.z, 
+                                                                tfMsg.transform.rotation.w));
 
-        // reliability estimation
-        if (estimateReliability_) {
-            resetReliabilities();
-
-            // failure detector
-            if (classifierType_ == 0) {
-                maeClassifier_.setClassifierDir(maeClassifierDir_);
-                maeClassifier_.readClassifierParams();
-                maes_.resize(particlesNum_);
-            } else {
-                RCLCPP_ERROR(get_logger(), "Incorrect classifier type was selected."
-                    " The expected type is 0, but %d was selected.", classifierType_);
-                exit(1);
+                    isInitializedTF_ = true;
+                } catch (tf2::TransformException ex) {
+                    tfFailedCnt++;
+                    if (tfFailedCnt >= 300) {
+                        RCLCPP_ERROR(get_logger(), "Cannot get the relative pose from the base link to the laser from the tf tree."
+                            " Did you set the static transform publisher between %s to %s?",
+                            baseLinkFrame_.c_str(), laserFrame_.c_str());
+                    }
+                    return;
+                }
+                tf2::Quaternion quatBaseLink2Laser(tfBaseLink2Laser.getRotation().x(),
+                    tfBaseLink2Laser.getRotation().y(),
+                    tfBaseLink2Laser.getRotation().z(),
+                    tfBaseLink2Laser.getRotation().w());
+                double baseLink2LaserRoll, baseLink2LaserPitch, baseLink2LaserYaw;
+                tf2::Matrix3x3 rotMatBaseLink2Laser(quatBaseLink2Laser);
+                rotMatBaseLink2Laser.getRPY(baseLink2LaserRoll, baseLink2LaserPitch, baseLink2LaserYaw);
+                baseLink2Laser_.setX(tfBaseLink2Laser.getOrigin().x());
+                baseLink2Laser_.setY(tfBaseLink2Laser.getOrigin().y());
+                baseLink2Laser_.setYaw(baseLink2LaserYaw);
+                isInitializedTF_ = true;
             }
+
+            // check map
+            if(not isInitializedMap_)
+            {
+                RCLCPP_INFO(get_logger(), "Waiting for the map message.");
+                if (gotMap_)
+                {
+                    isInitializedMap_ = true;
+                }
+                else
+                {
+                    mapFailedCnt++;
+                    if (mapFailedCnt >= 300) {
+                        RCLCPP_ERROR(get_logger(), "Cannot get a map message."
+                            " Did you pulish the map?"
+                            " Expected map topic name is %s\n", mapName_.c_str());
+                        exit(1);
+                    }
+                    return;
+                }
+            }
+
+            // check scan
+            if(not isInitializedTopic_)
+            {
+                RCLCPP_INFO(get_logger(), "Waiting for the scan message.");
+                if (gotScan_)
+                {
+                    isInitializedTopic_ = true;
+                }
+                else
+                {
+                    scanFailedCnt++;
+                    if (scanFailedCnt >= 300) {
+                        RCLCPP_ERROR(get_logger(), "Cannot get a scan message."
+                            " Did you pulish the scan?"
+                            " Expected scan topic name is %s\n", scanName_.c_str());
+                        exit(1);
+                    }
+                    return;
+                }
+            }
+
+            // reliability estimation
+            if (estimateReliability_) {
+                resetReliabilities();
+
+                // failure detector
+                if (classifierType_ == 0) {
+                    maeClassifier_.setClassifierDir(maeClassifierDir_);
+                    maeClassifier_.readClassifierParams();
+                    maes_.resize(particlesNum_);
+                } else {
+                    RCLCPP_ERROR(get_logger(), "Incorrect classifier type was selected."
+                        " The expected type is 0, but %d was selected.", classifierType_);
+                    exit(1);
+                }
+            }
+
+            // fixed parameters for the measurement models
+            normConstHit_ = 1.0 / sqrt(2.0 * varHit_ * M_PI);
+            denomHit_ = 1.0 / (2.0 * varHit_);
+            pRand_ = 1.0 / (scan_.range_max / mapResolution_);
+            measurementModelRandom_ = zRand_ * pRand_;
+            measurementModelInvalidScan_ = zMax_ + zRand_ * pRand_;
+
+            isInitialized_ = true;
+            RCLCPP_INFO(get_logger(), "MCL is ready to perform\n");
+
+            isInitializedTFAndTopic_ = true;
         }
+        else
+        {
+            updateMain();
+        }
+    }
 
-        // fixed parameters for the measurement models
-        normConstHit_ = 1.0 / sqrt(2.0 * varHit_ * M_PI);
-        denomHit_ = 1.0 / (2.0 * varHit_);
-        pRand_ = 1.0 / (scan_.range_max / mapResolution_);
-        measurementModelRandom_ = zRand_ * pRand_;
-        measurementModelInvalidScan_ = zMax_ + zRand_ * pRand_;
-
-        isInitialized_ = true;
-        RCLCPP_INFO(get_logger(), "MCL is ready to perform\n");
+    void updateMain()
+    {
+        updateParticlesByMotionModel();
+        setCanUpdateScan(false);
+        calculateLikelihoodsByMeasurementModel();
+        calculateLikelihoodsByDecisionModel();
+        calculateGLSampledPosesLikelihood();
+        calculateAMCLRandomParticlesRate();
+        calculateEffectiveSampleSize();
+        estimatePose();
+        resampleParticles();
+        // plotScan();
+        // plotWorld(50.0);
+        publishROSMessages();
+        broadcastTF();
+        // plotLikelihoodMap();
+        setCanUpdateScan(true);
+        printResult();
     }
 
     void updateParticlesByMotionModel(void) {
